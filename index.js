@@ -1,9 +1,17 @@
 import express from "express";
-import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import multer from "multer";
+
+import {
+  registerValidation,
+  loginValidation,
+  postCreateValidation,
+} from "./validations.js";
+import { handleValidationErrors, checkAuth } from "./utils/index.js";
+import { UserController, PostController } from "./controllers/index.js";
 
 mongoose
-  .connect("mongodb+srv://admin:wwwwww@cluster0.sgdo7fm.mongodb.net/")
+  .connect("mongodb+srv://admin:wwwwww@cluster0.sgdo7fm.mongodb.net/blog")
   .then(() => {
     console.log("DB ok");
   })
@@ -13,26 +21,57 @@ mongoose
 
 const app = express();
 
-app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.send("1Hello world");
+const storage = multer.diskStorage({
+  destination: (_, __, cb) => {
+    cb(null, "uploads");
+  },
+  filename: (_, file, cb) => {
+    cb(null, file.originalname);
+  },
 });
 
-app.post("/auth/login", (req, res) => {
-  console.log(req.body);
-  const token = jwt.sign(
-    {
-      email: req.body.email,
-      fullName: "Name",
-    },
-    "secret123"
-  );
+const upload = multer({ storage });
+
+app.use(express.json());
+app.use("/uploads", express.static("uploads"));
+
+app.post(
+  "/auth/register",
+  registerValidation,
+  handleValidationErrors,
+  UserController.register
+);
+app.post(
+  "/auth/login",
+  loginValidation,
+  handleValidationErrors,
+  UserController.login
+);
+app.get("/auth/me", checkAuth, UserController.getMe);
+
+app.post("/upload", checkAuth, upload.single("image"), (req, res) => {
   res.json({
-    success: true,
-    token,
+    url: `/uploads/${req.file.originalname}`,
   });
 });
+
+app.get("/posts", PostController.getAll);
+app.get("/posts/:id", PostController.getOne);
+app.post(
+  "/posts",
+  checkAuth,
+  postCreateValidation,
+  handleValidationErrors,
+  PostController.create
+);
+app.delete("/posts/:id", checkAuth, PostController.remove);
+app.patch(
+  "/posts/:id",
+  checkAuth,
+  postCreateValidation,
+  handleValidationErrors,
+  PostController.update
+);
 
 app.listen(4444, (err) => {
   if (err) {
